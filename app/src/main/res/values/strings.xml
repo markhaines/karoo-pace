@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pace</string>
+    <string name="extension_name">Pace</string>
+    <string name="datatype_name">Spd vs Avg</string>
+    <string name="datatype_description">Current speed, with the card coloured by how it compares to the ride average.</string>
+    <!-- Drawn inside the field. Matches the native speed field so it reads as one of them. -->
+    <string name="field_label">SPEED</string>
+</resources>

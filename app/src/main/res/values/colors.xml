@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- success_green_600, from the Karoo's own design system -->
+    <color name="ic_launcher_background">#0DBA75</color>
+</resources>

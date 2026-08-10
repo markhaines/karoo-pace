@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    id="karoopace"
+    displayName="@string/extension_name"
+    icon="@drawable/ic_pace"
+    scansDevices="false">
+
+    <DataType
+        typeId="speed-vs-average"
+        displayName="@string/datatype_name"
+        description="@string/datatype_description"
+        graphical="true"
+        icon="@drawable/ic_pace" />
+
+</ExtensionInfo>
