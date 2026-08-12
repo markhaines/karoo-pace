@@ -1,13 +1,20 @@
 # karoo-pace
 
-A Hammerhead Karoo 3 extension: one data field showing current speed, with the card coloured by
-how that speed compares to the ride average. Green when you're above it, salmon or red below,
-and an ordinary black card when you're near it.
+<!-- Screenshot slot: adb device screenshot of the coloured field mid-ride, docs/field.png.
+     Grab one next time the Karoo is plugged in (SIMULATE_BANDS makes it easy off the bike). -->
 
-The design goal was that it should be indistinguishable from a native field apart from the
-colour — same font, same metrics, same rules.
+A drop-in replacement for the Speed card on your Hammerhead Karoo 3: same number, same look,
+but the card colours itself by how your current speed compares to your ride average. A glance
+tells you whether you're up or down without reading the number mid-effort. Built to be
+indistinguishable from the native field apart from that colour — same font, same metrics, same
+rules.
 
-## The field
+[![Latest release](https://img.shields.io/github/v/release/markhaines/karoo-pace)](https://github.com/markhaines/karoo-pace/releases/latest)
+[![License](https://img.shields.io/github/license/markhaines/karoo-pace)](LICENSE)
+
+[Install](#install) · [Verify without riding](#verify-without-riding) · [How the colour works](#how-the-colour-works)
+
+## How the colour works
 
 | Speed vs ride average | Card | Chevron |
 |---|---|---|
@@ -25,7 +32,45 @@ speed wanders by 1–2 km/h at steady effort, which is wider than the neutral ba
 
 All thresholds are constants in `PaceBands.kt`, which is pure Kotlin and unit tested.
 
-## Matching native
+## Install
+
+No computer needed — the Karoo installs it through the Hammerhead Companion app on your phone
+(Karoo 3, firmware 1.527 or later):
+
+1. On your phone, open the [latest release](https://github.com/markhaines/karoo-pace/releases/latest)
+   and long-press the `.apk` file.
+2. Share the link with the **Hammerhead Companion** app — it pushes the extension to your Karoo.
+3. Reboot the Karoo once, then add the field to any ride profile page.
+
+After that, updates install the same way, no reboot needed.
+
+<details>
+<summary>Build from source instead</summary>
+
+**Requirements:** JDK 17, the Android SDK, and `io.hammerhead:karoo-ext` in mavenLocal (clone
+`hammerheadnav/karoo-ext` at the matching tag and run `./gradlew :lib:publishToMavenLocal` — no
+GitHub Packages token required).
+
+```sh
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+./gradlew :app:testDebugUnitTest      # band logic, no device needed
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Installing is enough for the field to re-render; a reboot is only needed the first time the
+extension is added, so the Karoo picks up the service. Debug builds install as a separate app
+id (`.debug` suffix), so they sit alongside a release install rather than replacing it.
+</details>
+
+## Verify without riding
+
+Set `SIMULATE_BANDS = true` in `SpeedVsAverageDataType.kt` to cycle through every colour band
+every two seconds, so you can check the field on your desk before taking it out. Turn it off
+before your ride.
+
+## How it matches native
 
 Everything below was measured off the device rather than judged by eye — screenshot over adb,
 then scan pixel columns for glyph bands. Reach for that loop rather than nudging constants.
@@ -46,22 +91,6 @@ There is no way to have the host draw the number *and* colour the card: the one 
 `UpdateGraphicConfig(formatDataTypeId = ...)`, renders the number underneath the extension's own
 graphic, so any opaque background hides it. Verified on a real ride. Hence replication.
 
-## Build
+## License
 
-Needs JDK 17, the Android SDK, and `io.hammerhead:karoo-ext` in mavenLocal (clone
-`hammerheadnav/karoo-ext` at the matching tag and `./gradlew :lib:publishToMavenLocal` — no
-GitHub Packages token required).
-
-```sh
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
-export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-./gradlew :app:testDebugUnitTest      # band logic, no device needed
-./gradlew :app:assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-Installing is enough for the field to re-render; a reboot is only needed when the extension is
-first added, so the Karoo picks up the service.
-
-To check the colours without riding, set `SIMULATE_BANDS = true` in `SpeedVsAverageDataType.kt`.
-It cycles every band every two seconds. Turn it off before going out.
+Apache-2.0 — see [LICENSE](LICENSE).
