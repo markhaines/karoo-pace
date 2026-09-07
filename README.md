@@ -1,5 +1,7 @@
 # karoo-pace
 
+Dev tier: 3 (public)
+
 <!-- Screenshot slot: adb device screenshot of the coloured field mid-ride, docs/field.png.
      Grab one next time the Karoo is plugged in (SIMULATE_BANDS makes it easy off the bike). -->
 
