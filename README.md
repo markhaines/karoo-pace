@@ -96,3 +96,16 @@ graphic, so any opaque background hides it. Verified on a real ride. Hence repli
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+## Decisions
+
+Architectural decisions live in `docs/adr/`, one numbered file each, indexed at
+[`docs/adr/README.md`](docs/adr/README.md). **Read the index before changing how this repo is
+built.** Several things here that look wrong, or look like they should be replaced with the
+standard off-the-shelf component, are deliberate and recorded there with the reason.
+
+`GLOSSARY.md` covers terms that mean something specific in this repo.
+
+**Merge readiness:** before a branch merges, say what it changed about the ADR library, and
+land those updates in the same change. A decision recorded a week later is a decision nobody
+recorded.
