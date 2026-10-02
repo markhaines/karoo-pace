@@ -93,6 +93,12 @@ There is no way to have the host draw the number *and* colour the card: the one 
 `UpdateGraphicConfig(formatDataTypeId = ...)`, renders the number underneath the extension's own
 graphic, so any opaque background hides it. Verified on a real ride. Hence replication.
 
+## Releases
+
+Semver, tagged `vMAJOR.MINOR.PATCH`, with `versionName` in `app/build.gradle.kts` kept in
+step. See [CHANGELOG.md](CHANGELOG.md). CI runs the unit tests, Android Lint (any error fails
+the build) and a debug build on every push to `main` and every pull request.
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
