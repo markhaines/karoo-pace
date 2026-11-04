@@ -11,6 +11,20 @@ All notable changes. Semver, tagged `vMAJOR.MINOR.PATCH`.
 
 ### Changed
 - `GLOSSARY.md` became `CONTEXT.md`, in the domain-modeling skill's format.
+- Band edges have hysteresis: the colour holds until the 3s speed is 1 percentage point past
+  an edge, and down to 4 km/h at the 5 km/h cut-off, so the card no longer flips on an edge
+  (#2, ADR-0002).
+- The field redraws at most once a second, always with the newest reading, matching the
+  Karoo's 1Hz limit on extension views (#1, ADR-0003).
+
+### Fixed
+- A missing raw speed showed `0`; it now shows `--` like native fields (#2).
+- NaN, infinite and negative speeds or averages could colour the card (NaN fell through to
+  the slowest band). They now count as no reading and leave it neutral (#2).
+- Bursts of telemetry pushed a redraw per update, so the Karoo dropped most of them and could
+  show a stale frame. Stream callbacks are now conflated, so old readings cannot queue (#1).
+- When the host binder died the field kept rendering into it. Rendering now stops and every
+  Karoo stream consumer is unregistered; the view's cancel also stops its setup work (#1).
 
 ## 0.1.0 — 2026-08-12
 

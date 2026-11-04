@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.ui.unit.DpSize
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
+import com.hainesy.karoopace.ViewPipeline.launchView
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.DataType
@@ -18,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalGlanceRemoteViewsApi::class)
 class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_ID) {
@@ -27,29 +27,40 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
-        // Draw the whole field ourselves. Asking the host for a header costs more vertical
-        // space than drawing our own, and asking it to render the number puts its digits
-        // underneath our background rather than on top of it.
-        scope.launch {
-            emitter.onNext(UpdateGraphicConfig(showHeader = false))
-            emitter.onNext(UpdateNumericConfig(DataType.Type.SPEED))
-        }
-
         val karoo = PaceRuntime.system(context)
 
-        val job = scope.launch {
-            val speed = karoo.streamDataFlow(DataType.Type.SPEED)
-            val smoothed = karoo.streamDataFlow(DataType.Type.SMOOTHED_3S_AVERAGE_SPEED)
-            val average = karoo.streamDataFlow(DataType.Type.AVERAGE_SPEED)
-            val profile = if (config.preview) flowOf(null) else karoo.streamUserProfile()
+        val speed = karoo.streamDataFlow(DataType.Type.SPEED)
+        val smoothed = karoo.streamDataFlow(DataType.Type.SMOOTHED_3S_AVERAGE_SPEED)
+        val average = karoo.streamDataFlow(DataType.Type.AVERAGE_SPEED)
+        val profile = if (config.preview) flowOf(null) else karoo.streamUserProfile()
+        val frames = combine(speed, smoothed, average, profile) { s, sm, avg, prof ->
+            Frame(s.value, sm.value, avg.value, prof.isImperial())
+        }
 
-            combine(speed, smoothed, average, profile) { s, sm, avg, prof ->
-                Frame(s.value, sm.value, avg.value, prof.isImperial())
-            }.collect { frame ->
-                if (!render(context, config, emitter, frame)) {
-                    return@collect
+        // Last band shown on this view, for PaceBands hysteresis. Renders are sequential, so a
+        // plain local is safe.
+        var shown = PaceBands.Band.NEUTRAL
+
+        // Config and rendering share one job, so the emitter's cancel stops both. Rendering is
+        // throttled to the emitter's 1Hz window, latest frame wins, and ends for good when the
+        // host binder dies, which unregisters all four consumers.
+        val job = scope.launchView(
+            configure = {
+                // Draw the whole field ourselves. Asking the host for a header costs more
+                // vertical space than drawing our own, and asking it to render the number puts
+                // its digits underneath our background rather than on top of it.
+                try {
+                    emitter.onNext(UpdateGraphicConfig(showHeader = false))
+                    emitter.onNext(UpdateNumericConfig(DataType.Type.SPEED))
+                } catch (e: RemoteException) {
+                    Log.w(TAG, "host binder dead before the view was configured", e)
                 }
-            }
+            },
+            frames = frames,
+        ) { frame ->
+            val band = render(context, config, emitter, frame, shown) ?: return@launchView false
+            shown = band
+            true
         }
 
         emitter.setCancellable { job.cancel() }
@@ -65,31 +76,35 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
     private fun UserProfile?.isImperial(): Boolean =
         this?.preferredUnit?.distance == UserProfile.PreferredUnit.UnitType.IMPERIAL
 
-    /** Returns false once the host-side binder is gone, which is the only teardown signal. */
+    /**
+     * Returns the band drawn, or null once the host-side binder is gone, which is the only
+     * teardown signal.
+     */
     private suspend fun render(
         context: Context,
         config: ViewConfig,
         emitter: ViewEmitter,
         frame: Frame,
-    ): Boolean {
+        previous: PaceBands.Band,
+    ): PaceBands.Band? {
         // Colour follows the smoothed stream; the number shown is the raw one, so the field
         // still reacts instantly while the colour stays calm.
         val band = if (SIMULATE_BANDS) {
             PaceBands.Band.entries[((System.currentTimeMillis() / 2000) % PaceBands.Band.entries.size).toInt()]
         } else {
-            PaceBands.bandFor(frame.smoothedMps, frame.averageMps)
+            PaceBands.bandFor(frame.smoothedMps, frame.averageMps, previous)
         }
-        val display = PaceBands.toDisplayUnits(frame.speedMps ?: 0.0, frame.imperial)
+        val text = PaceBands.speedText(frame.speedMps, frame.imperial)
 
         val result = glance.compose(context, DpSize.Unspecified) {
-            PaceView(context, config, band, display)
+            PaceView(context, config, band, text)
         }
         return try {
             emitter.updateView(result.remoteViews)
-            true
+            band
         } catch (e: RemoteException) {
             Log.w(TAG, "host binder dead, stopping view updates", e)
-            false
+            null
         }
     }
 

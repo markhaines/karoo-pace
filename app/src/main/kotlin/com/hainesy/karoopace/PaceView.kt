@@ -25,8 +25,6 @@ import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import io.hammerhead.karooext.models.ViewConfig
-import java.text.NumberFormat
-import java.util.Locale
 
 /**
  * Geometry measured off a native Karoo 3 field (AVG SPEED, 238x126 slot, 300dpi):
@@ -60,18 +58,13 @@ private const val NUMBER_TOP_DP = 10.4f
  */
 private val KAROO_FONT = FontFamily("ibm-sans-cond")
 
-/** Native shows "0", not "0.0" — one decimal only when there is one to show. */
-private fun formatSpeed(value: Double): String =
-    NumberFormat.getInstance(Locale.getDefault()).apply {
-        minimumFractionDigits = 0
-        maximumFractionDigits = 1
-    }.format(value)
 @Composable
 fun PaceView(
     context: Context,
     config: ViewConfig,
     band: PaceBands.Band,
-    speedDisplay: Double,
+    /** Already formatted by [PaceBands.speedText], [PaceBands.NO_READING] included. */
+    speedText: String,
 ) {
     val background = Color(PaceBands.backgroundArgb(band))
     val foreground = Color(PaceBands.textArgb(band))
@@ -154,7 +147,7 @@ fun PaceView(
                 )
             }
             Text(
-                text = formatSpeed(speedDisplay),
+                text = speedText,
                 style = TextStyle(
                     color = ColorProvider(foreground),
                     fontSize = numberSp.sp,
