@@ -37,6 +37,10 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
             Frame(s.value, sm.value, avg.value, prof.isImperial())
         }
 
+        // Last band shown on this view, for PaceBands hysteresis. Renders are sequential, so a
+        // plain local is safe.
+        var shown = PaceBands.Band.NEUTRAL
+
         // Config and rendering share one job, so the emitter's cancel stops both. Rendering is
         // throttled to the emitter's 1Hz window, latest frame wins, and ends for good when the
         // host binder dies, which unregisters all four consumers.
@@ -53,7 +57,11 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
                 }
             },
             frames = frames,
-        ) { frame -> render(context, config, emitter, frame) }
+        ) { frame ->
+            val band = render(context, config, emitter, frame, shown) ?: return@launchView false
+            shown = band
+            true
+        }
 
         emitter.setCancellable { job.cancel() }
     }
@@ -68,31 +76,35 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
     private fun UserProfile?.isImperial(): Boolean =
         this?.preferredUnit?.distance == UserProfile.PreferredUnit.UnitType.IMPERIAL
 
-    /** Returns false once the host-side binder is gone, which is the only teardown signal. */
+    /**
+     * Returns the band drawn, or null once the host-side binder is gone, which is the only
+     * teardown signal.
+     */
     private suspend fun render(
         context: Context,
         config: ViewConfig,
         emitter: ViewEmitter,
         frame: Frame,
-    ): Boolean {
+        previous: PaceBands.Band,
+    ): PaceBands.Band? {
         // Colour follows the smoothed stream; the number shown is the raw one, so the field
         // still reacts instantly while the colour stays calm.
         val band = if (SIMULATE_BANDS) {
             PaceBands.Band.entries[((System.currentTimeMillis() / 2000) % PaceBands.Band.entries.size).toInt()]
         } else {
-            PaceBands.bandFor(frame.smoothedMps, frame.averageMps)
+            PaceBands.bandFor(frame.smoothedMps, frame.averageMps, previous)
         }
-        val display = PaceBands.toDisplayUnits(frame.speedMps ?: 0.0, frame.imperial)
+        val text = PaceBands.speedText(frame.speedMps, frame.imperial)
 
         val result = glance.compose(context, DpSize.Unspecified) {
-            PaceView(context, config, band, display)
+            PaceView(context, config, band, text)
         }
         return try {
             emitter.updateView(result.remoteViews)
-            true
+            band
         } catch (e: RemoteException) {
             Log.w(TAG, "host binder dead, stopping view updates", e)
-            false
+            null
         }
     }
 

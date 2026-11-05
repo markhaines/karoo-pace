@@ -25,6 +25,7 @@ from reading the code. The test is whether it would drift if nobody wrote it dow
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-colour-from-smoothed-speed-number-from-raw.md) | Colour from the 3s smoothed stream, number from the raw one | Accepted |
+| [0002](0002-hysteresis-on-band-edges.md) | Hold the shown band until a reading is clear of its edge | Accepted |
 | [0003](0003-redraw-once-a-second-newest-reading-wins.md) | Redraw at most once a second, newest reading wins | Accepted |
 
 ## Candidates, not yet written

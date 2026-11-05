@@ -32,11 +32,22 @@ average has established itself. Colour follows the **3s smoothed** speed stream 
 shown is the **raw** one, so the field reacts instantly but the colour doesn't strobe — raw GPS
 speed wanders by 1–2 km/h at steady effort, which is wider than the neutral band.
 
+Each edge has a little **hysteresis**: once the card is showing a band, the 3s speed has to go
+1 percentage point past an edge before the colour changes (so FASTER, entered at 105%, holds down
+to 104%). The 5 km/h cut-off holds down to 4 km/h the same way. A reading parked on an edge
+holds its colour instead of flipping the whole card every second. See
+[ADR-0002](docs/adr/0002-hysteresis-on-band-edges.md).
+
+When there is no usable reading, the field says so rather than guessing. A missing, NaN,
+infinite or negative raw speed shows `--`, as native fields do, never `0`. A missing or invalid
+3s speed or ride average leaves the card neutral (black). After a dropout the colour is
+decided afresh, without hysteresis.
+
 The field redraws at most once a second, always with the newest reading. That is the most the
 Karoo accepts from an extension view; faster updates are silently dropped. See
 [ADR-0003](docs/adr/0003-redraw-once-a-second-newest-reading-wins.md).
 
-All thresholds are constants in `PaceBands.kt`, which is pure Kotlin and unit tested.
+All thresholds and margins are constants in `PaceBands.kt`, which is pure Kotlin and unit tested.
 
 ## Install
 
