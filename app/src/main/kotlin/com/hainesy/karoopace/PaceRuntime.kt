@@ -7,27 +7,20 @@ import io.hammerhead.karooext.KarooSystemService
 /**
  * One KarooSystemService for the process. Connected from [PaceExtension.onCreate] rather than
  * lazily on first use: the service silently drops work until the binding is up, so connecting
- * late loses the first updates.
+ * late loses the first updates. The lifecycle itself lives in [SharedConnection], which is
+ * unit tested.
  */
 object PaceRuntime {
 
     private const val TAG = "PaceRuntime"
 
-    @Volatile
-    private var service: KarooSystemService? = null
+    private val connection = SharedConnection<KarooSystemService>(
+        connect = { it.connect { connected -> Log.d(TAG, "Karoo system connected=$connected") } },
+        disconnect = { it.disconnect() },
+    )
 
-    @Synchronized
-    fun system(context: Context): KarooSystemService {
-        service?.let { return it }
-        val created = KarooSystemService(context.applicationContext)
-        created.connect { connected -> Log.d(TAG, "Karoo system connected=$connected") }
-        service = created
-        return created
-    }
+    fun system(context: Context): KarooSystemService =
+        connection.get { KarooSystemService(context.applicationContext) }
 
-    @Synchronized
-    fun shutdown() {
-        service?.disconnect()
-        service = null
-    }
+    fun shutdown() = connection.shutdown()
 }

@@ -1,7 +1,9 @@
 package com.hainesy.karoopace
 
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -10,7 +12,9 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.transformWhile
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 
 /**
  * How a field's telemetry gets to the screen, kept free of Android and karoo-ext types so the
@@ -77,4 +81,30 @@ object ViewPipeline {
         frames.renderThrottled(windowMs, render)
         configuration.cancel()
     }
+}
+
+/**
+ * Owns every running view of one data type, for the life of the extension.
+ *
+ * Views are isolated: one ending (binder death) or failing does not touch the others. An
+ * unexpected error is handed to [onError] rather than left uncaught, which on Android would
+ * kill the extension process. [shutdown] stops every view for good, which unregisters all their
+ * consumers, and any view started after it never registers anything.
+ */
+class ViewHost(context: CoroutineContext, onError: (Throwable) -> Unit) {
+
+    private val scope = CoroutineScope(
+        context + SupervisorJob() + CoroutineExceptionHandler { _, e -> onError(e) },
+    )
+
+    val isShutDown: Boolean get() = !scope.isActive
+
+    fun <T> launchView(
+        configure: suspend () -> Boolean,
+        frames: Flow<T>,
+        windowMs: Long = ViewPipeline.RENDER_WINDOW_MS,
+        render: suspend (T) -> Boolean,
+    ): Job = with(ViewPipeline) { scope.launchView(configure, frames, windowMs, render) }
+
+    fun shutdown() = scope.cancel()
 }

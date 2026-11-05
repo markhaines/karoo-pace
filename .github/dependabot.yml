@@ -1,0 +1,28 @@
+# Proposes dependency updates as PRs, so CI runs on every bump before it lands.
+version: 2
+updates:
+  # Workflow actions are pinned to commit SHAs; Dependabot moves the SHA and the tag comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      gradle-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Lives on GitHub Packages, which Dependabot cannot read without a token, and its
+      # version has to match the Karoo firmware. Bump by hand.
+      - dependency-name: "io.hammerhead:karoo-ext"
+    commit-message:
+      prefix: deps

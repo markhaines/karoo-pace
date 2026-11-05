@@ -27,6 +27,7 @@ from reading the code. The test is whether it would drift if nobody wrote it dow
 | [0001](0001-colour-from-smoothed-speed-number-from-raw.md) | Colour from the 3s smoothed stream, number from the raw one | Accepted |
 | [0002](0002-hysteresis-on-band-edges.md) | Hold the shown band until a reading is clear of its edge | Accepted |
 | [0003](0003-redraw-once-a-second-newest-reading-wins.md) | Redraw at most once a second, newest reading wins | Accepted |
+| [0004](0004-releases-signed-in-ci-from-secrets.md) | Build and sign releases in CI from GitHub secrets, drafted not published | Accepted |
 
 ## Candidates, not yet written
 
