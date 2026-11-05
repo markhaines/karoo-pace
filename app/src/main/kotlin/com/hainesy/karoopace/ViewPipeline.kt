@@ -2,6 +2,7 @@ package com.hainesy.karoopace
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -59,14 +60,21 @@ object ViewPipeline {
     /**
      * Starts a view's one-off configuration and its render loop under a single job, so one
      * cancel (from the emitter) stops both.
+     *
+     * A dead host binder ends the whole view from either side. [configure] returning false
+     * cancels the view, which unregisters every consumer even if no telemetry has arrived yet
+     * (combine would otherwise wait forever). [render] returning false ends the render loop and
+     * cancels any configuration still in flight.
      */
     fun <T> CoroutineScope.launchView(
-        configure: suspend () -> Unit,
+        configure: suspend () -> Boolean,
         frames: Flow<T>,
         windowMs: Long = RENDER_WINDOW_MS,
         render: suspend (T) -> Boolean,
     ): Job = launch {
-        launch { configure() }
+        val view = this
+        val configuration = launch { if (!configure()) view.cancel() }
         frames.renderThrottled(windowMs, render)
+        configuration.cancel()
     }
 }

@@ -140,7 +140,7 @@ class ViewPipelineTest {
     fun `binder death stops collection and unregisters every consumer`() = runTest {
         val sources = fourSources()
         val emitter = FakeEmitter(this, failOn = 2)
-        val job = backgroundScope.launchView(configure = {}, frames = framesOf(sources)) { emitter.render(it) }
+        val job = backgroundScope.launchView(configure = { true }, frames = framesOf(sources)) { emitter.render(it) }
         runCurrent()
         assertTrue(sources.all { it.live })
 
@@ -170,7 +170,7 @@ class ViewPipelineTest {
     fun `binder dead on the very first frame never retries`() = runTest {
         val sources = fourSources()
         val emitter = FakeEmitter(this, failOn = 1)
-        val job = backgroundScope.launchView(configure = {}, frames = framesOf(sources)) { emitter.render(it) }
+        val job = backgroundScope.launchView(configure = { true }, frames = framesOf(sources)) { emitter.render(it) }
         runCurrent()
         repeat(5) { i ->
             sources.forEach { it.push(i) }
@@ -219,21 +219,74 @@ class ViewPipelineTest {
     }
 
     @Test
-    fun `binder death does not cut short configuration already in flight`() = runTest {
+    fun `binder dead at configuration with no telemetry ends the view and unregisters every consumer`() =
+        runTest {
+            val sources = fourSources()
+            val emitter = FakeEmitter(this)
+            val job = backgroundScope.launchView(
+                configure = {
+                    delay(100) // consumers are registered by now
+                    false // what the data type returns when onNext hits a dead binder
+                },
+                frames = framesOf(sources),
+            ) { emitter.render(it) }
+            runCurrent()
+            assertTrue("consumers registered while configuring", sources.all { it.live })
+
+            // No telemetry ever arrives, so combine never emits: only the config result can end it.
+            advanceTimeBy(101)
+
+            assertTrue("view job should have ended", job.isCompleted)
+            sources.forEach {
+                assertTrue(it.registered.isNotEmpty())
+                assertEquals("${it.registered} should all be unregistered", it.registered, it.unregistered)
+                assertTrue(!it.live)
+            }
+            assertEquals(0, emitter.calls)
+        }
+
+    @Test
+    fun `binder death while rendering cancels configuration still in flight`() = runTest {
         val sources = fourSources()
         val emitter = FakeEmitter(this, failOn = 1)
         var configDone = false
-        backgroundScope.launchView(
+        var configCancelled = false
+        val job = backgroundScope.launchView(
             configure = {
-                delay(500)
-                configDone = true
+                try {
+                    delay(5_000)
+                    configDone = true
+                    true
+                } catch (e: CancellationException) {
+                    configCancelled = true
+                    throw e
+                }
             },
             frames = framesOf(sources),
         ) { emitter.render(it) }
         runCurrent()
         sources.forEach { it.push(1) }
-        advanceTimeBy(1_000)
-        assertTrue(configDone)
+        runCurrent() // first render hits the dead binder
+
+        assertTrue("configuration should be cancelled", configCancelled)
+        assertTrue(!configDone)
+        assertTrue(job.isCompleted)
         sources.forEach { assertEquals(it.registered, it.unregistered) }
+        advanceTimeBy(10_000)
+        assertTrue(!configDone)
+        assertEquals(1, emitter.calls)
+    }
+
+    @Test
+    fun `a successful configuration leaves the view rendering`() = runTest {
+        val sources = fourSources()
+        val emitter = FakeEmitter(this)
+        val job = backgroundScope.launchView(configure = { true }, frames = framesOf(sources)) { emitter.render(it) }
+        runCurrent()
+        assertTrue(job.isActive)
+        sources.forEach { it.push(1) }
+        runCurrent()
+        assertEquals(1, emitter.drawn.size)
+        assertTrue(job.isActive && sources.all { it.live })
     }
 }

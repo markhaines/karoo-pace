@@ -25,6 +25,9 @@ All notable changes. Semver, tagged `vMAJOR.MINOR.PATCH`.
   show a stale frame. Stream callbacks are now conflated, so old readings cannot queue (#1).
 - When the host binder died the field kept rendering into it. Rendering now stops and every
   Karoo stream consumer is unregistered; the view's cancel also stops its setup work (#1).
+- A dead host binder during view setup was logged and ignored, so with no telemetry yet the
+  view waited forever with its consumers registered. It now ends the view and unregisters
+  them, and a binder death while drawing cancels setup still in flight (#1).
 
 ## 0.1.0 — 2026-08-12
 

@@ -42,8 +42,8 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
         var shown = PaceBands.Band.NEUTRAL
 
         // Config and rendering share one job, so the emitter's cancel stops both. Rendering is
-        // throttled to the emitter's 1Hz window, latest frame wins, and ends for good when the
-        // host binder dies, which unregisters all four consumers.
+        // throttled to the emitter's 1Hz window, latest frame wins. A dead host binder, seen by
+        // either config or render, ends the view for good and unregisters all four consumers.
         val job = scope.launchView(
             configure = {
                 // Draw the whole field ourselves. Asking the host for a header costs more
@@ -52,8 +52,10 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
                 try {
                     emitter.onNext(UpdateGraphicConfig(showHeader = false))
                     emitter.onNext(UpdateNumericConfig(DataType.Type.SPEED))
+                    true
                 } catch (e: RemoteException) {
-                    Log.w(TAG, "host binder dead before the view was configured", e)
+                    Log.w(TAG, "host binder dead before the view was configured, stopping", e)
+                    false
                 }
             },
             frames = frames,
