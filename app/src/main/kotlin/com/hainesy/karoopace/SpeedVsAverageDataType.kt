@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.ui.unit.DpSize
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
+import com.hainesy.karoopace.ViewPipeline.launchView
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.DataType
@@ -18,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalGlanceRemoteViewsApi::class)
 class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_ID) {
@@ -27,30 +27,33 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
-        // Draw the whole field ourselves. Asking the host for a header costs more vertical
-        // space than drawing our own, and asking it to render the number puts its digits
-        // underneath our background rather than on top of it.
-        scope.launch {
-            emitter.onNext(UpdateGraphicConfig(showHeader = false))
-            emitter.onNext(UpdateNumericConfig(DataType.Type.SPEED))
-        }
-
         val karoo = PaceRuntime.system(context)
 
-        val job = scope.launch {
-            val speed = karoo.streamDataFlow(DataType.Type.SPEED)
-            val smoothed = karoo.streamDataFlow(DataType.Type.SMOOTHED_3S_AVERAGE_SPEED)
-            val average = karoo.streamDataFlow(DataType.Type.AVERAGE_SPEED)
-            val profile = if (config.preview) flowOf(null) else karoo.streamUserProfile()
-
-            combine(speed, smoothed, average, profile) { s, sm, avg, prof ->
-                Frame(s.value, sm.value, avg.value, prof.isImperial())
-            }.collect { frame ->
-                if (!render(context, config, emitter, frame)) {
-                    return@collect
-                }
-            }
+        val speed = karoo.streamDataFlow(DataType.Type.SPEED)
+        val smoothed = karoo.streamDataFlow(DataType.Type.SMOOTHED_3S_AVERAGE_SPEED)
+        val average = karoo.streamDataFlow(DataType.Type.AVERAGE_SPEED)
+        val profile = if (config.preview) flowOf(null) else karoo.streamUserProfile()
+        val frames = combine(speed, smoothed, average, profile) { s, sm, avg, prof ->
+            Frame(s.value, sm.value, avg.value, prof.isImperial())
         }
+
+        // Config and rendering share one job, so the emitter's cancel stops both. Rendering is
+        // throttled to the emitter's 1Hz window, latest frame wins, and ends for good when the
+        // host binder dies, which unregisters all four consumers.
+        val job = scope.launchView(
+            configure = {
+                // Draw the whole field ourselves. Asking the host for a header costs more
+                // vertical space than drawing our own, and asking it to render the number puts
+                // its digits underneath our background rather than on top of it.
+                try {
+                    emitter.onNext(UpdateGraphicConfig(showHeader = false))
+                    emitter.onNext(UpdateNumericConfig(DataType.Type.SPEED))
+                } catch (e: RemoteException) {
+                    Log.w(TAG, "host binder dead before the view was configured", e)
+                }
+            },
+            frames = frames,
+        ) { frame -> render(context, config, emitter, frame) }
 
         emitter.setCancellable { job.cancel() }
     }

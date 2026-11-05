@@ -8,3 +8,4 @@
 - **Raw vs smoothed**: Two speed streams. Raw drives the number, 3s smoothed drives the colour. See ADR-0001.
 - **`PaceBands.kt`**: Pure Kotlin holding every threshold. Unit tested, and the place thresholds change.
 - **`SIMULATE_BANDS`**: The off-bike verification switch, so the field can be checked without riding.
+- **Render window**: The 1s minimum gap between redraws, set by the Karoo's 1Hz limit on extension views. Newest frame wins. See ADR-0003.

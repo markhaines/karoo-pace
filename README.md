@@ -32,6 +32,10 @@ average has established itself. Colour follows the **3s smoothed** speed stream 
 shown is the **raw** one, so the field reacts instantly but the colour doesn't strobe — raw GPS
 speed wanders by 1–2 km/h at steady effort, which is wider than the neutral band.
 
+The field redraws at most once a second, always with the newest reading. That is the most the
+Karoo accepts from an extension view; faster updates are silently dropped. See
+[ADR-0003](docs/adr/0003-redraw-once-a-second-newest-reading-wins.md).
+
 All thresholds are constants in `PaceBands.kt`, which is pure Kotlin and unit tested.
 
 ## Install
@@ -56,7 +60,7 @@ GitHub Packages token required).
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-./gradlew :app:testDebugUnitTest      # band logic, no device needed
+./gradlew :app:testDebugUnitTest      # band logic and redraw timing, no device needed
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
