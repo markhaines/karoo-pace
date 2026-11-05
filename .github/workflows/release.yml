@@ -23,7 +23,7 @@ jobs:
     permissions:
       contents: read
       packages: read # karoo-ext from GitHub Packages
-      checks: read # the CI result for the tagged commit
+      actions: read # the CI workflow run for the tagged commit
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -32,20 +32,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0 # full history, so the tag can be checked against main
 
+      # Script and its tests: .github/scripts/check-release-gate.sh, test-release-gate.sh.
       - name: Check the tag is on main and CI passed on it
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main. Tag a commit on main."
-            exit 1
-          fi
-          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=build" \
-            --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.started_at) | last | .conclusion // "missing"')
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::CI 'build' on $GITHUB_SHA is '$conclusion', not success. Wait for CI on main to pass, then re-run."
-            exit 1
-          fi
+        run: .github/scripts/check-release-gate.sh
 
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:

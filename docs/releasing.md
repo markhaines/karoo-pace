@@ -40,8 +40,10 @@ Packages and creates the draft release.
    CHANGELOG `Unreleased` entries under the new version, and merge through a PR with CI green.
 2. Wait for CI on `main` to pass on the merge commit, then tag that commit and push the tag:
    `git tag v0.2.0 && git push origin v0.2.0`. The workflow stops unless the tagged commit is
-   on `main`, its CI `build` check passed, and the tag equals `v` + `versionName`. If CI was
-   still running, re-run the workflow once it is green.
+   on `main`, the latest CI workflow run (`ci.yml`, pushed to `main`) for that commit passed,
+   and the tag equals `v` + `versionName`. If CI was still running, re-run the workflow once
+   it is green. The gate is `.github/scripts/check-release-gate.sh`; CI runs its tests
+   (`test-release-gate.sh`) on every PR.
 3. The Release workflow then, in a build job with a read-only token:
    - runs `testReleaseUnitTest` (which includes `ReleaseGuardTest`, so a build with
      `SIMULATE_BANDS` on cannot ship), `lintRelease` and `assembleRelease`;

@@ -33,6 +33,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
           validate-wrappers: true
+      - name: Test the release gate script
+        run: bash .github/scripts/test-release-gate.sh
       # The runner image ships an Android SDK with licences accepted, so no
       # android-actions/setup-android (which broke on 2026-09-20 elsewhere).
       - name: Test, lint, build
