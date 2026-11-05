@@ -30,6 +30,10 @@ class SpeedVsAverageDataType(extension: String) : DataTypeImpl(extension, TYPE_I
     fun shutdown() = views.shutdown()
 
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
+        // After teardown, start nothing: PaceRuntime.system would otherwise bind a fresh
+        // KarooSystemService that nothing disconnects until the next teardown.
+        if (views.isShutDown) return
+
         val karoo = PaceRuntime.system(context)
 
         val speed = karoo.streamDataFlow(DataType.Type.SPEED)

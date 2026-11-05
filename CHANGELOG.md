@@ -8,9 +8,10 @@ All notable changes. Semver, tagged `vMAJOR.MINOR.PATCH`.
 - CI on every push to `main` and every pull request: the `PaceBands` unit tests, Android Lint
   (fails on any error) and a debug build. The tests existed; nothing ran them.
 - A Releases section in the README, and this changelog. Completes Dev tier 3.
-- A Release workflow: a pushed `vX.Y.Z` tag builds the APK signed from GitHub secrets,
-  verifies the signature against the release certificate, and drafts a GitHub release with
-  the APK and its SHA-256 (#3, ADR-0004). Steps in `docs/releasing.md`.
+- A Release workflow: a pushed `vX.Y.Z` tag on a `main` commit that passed CI builds the APK
+  signed from GitHub secrets with a read-only token, verifies the signature against the
+  release certificate, and drafts a GitHub release with the APK and its SHA-256 (#3,
+  ADR-0004). Steps in `docs/releasing.md`.
 - Lifecycle tests: several views at once, extension teardown, binder death in one view, and
   errors, plus the shared Karoo connection's connect and disconnect (#3).
 - Dependabot for workflow actions and Gradle dependencies (#3).

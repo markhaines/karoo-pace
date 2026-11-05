@@ -38,15 +38,18 @@ Packages and creates the draft release.
 
 1. On a branch: bump `versionName` **and** `versionCode` in `app/build.gradle.kts`, move the
    CHANGELOG `Unreleased` entries under the new version, and merge through a PR with CI green.
-2. Tag the merge commit on `main` and push the tag:
-   `git tag v0.2.0 && git push origin v0.2.0`. The tag must equal `v` + `versionName` or the
-   workflow fails.
-3. The Release workflow then:
+2. Wait for CI on `main` to pass on the merge commit, then tag that commit and push the tag:
+   `git tag v0.2.0 && git push origin v0.2.0`. The workflow stops unless the tagged commit is
+   on `main`, its CI `build` check passed, and the tag equals `v` + `versionName`. If CI was
+   still running, re-run the workflow once it is green.
+3. The Release workflow then, in a build job with a read-only token:
    - runs `testReleaseUnitTest` (which includes `ReleaseGuardTest`, so a build with
      `SIMULATE_BANDS` on cannot ship), `lintRelease` and `assembleRelease`;
    - verifies the APK with `apksigner`: exactly one signer, and its certificate SHA-256 equals
      `RELEASE_CERT_SHA256`; the package is `com.hainesy.karoopace` and not debuggable;
-   - creates a draft release `vX.Y.Z` with `karoo-pace-X.Y.Z.apk` and its `.sha256`.
+   - hands the APK and its `.sha256` to a separate release job, the only one with write
+     access, which creates a draft release `vX.Y.Z` with `karoo-pace-X.Y.Z.apk` and its
+     `.sha256`. That job runs no build code and never sees the signing secrets.
 4. Check the draft, run the device checks below on that APK, then publish it.
 
 ## Verifying a downloaded release

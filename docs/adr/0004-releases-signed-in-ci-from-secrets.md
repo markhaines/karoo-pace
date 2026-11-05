@@ -13,14 +13,17 @@ the latest release APK, so a wrong build reaches the bike.
 
 ## Decision
 
-A pushed `vX.Y.Z` tag runs the Release workflow. It restores the keystore from repository
-secrets into the runner's temp directory, builds, runs the release unit tests and lint, then
-verifies the APK with `apksigner` against a pinned certificate fingerprint (also a secret)
-before creating a draft release. The keystore and passwords exist only as secrets; the
-Gradle build reads them from `KAROO_PACE_*` environment variables, or from the gitignored
-`keystore.properties` for a local build. `SIMULATE_BANDS` is a `BuildConfig` field: opt-in
-for debug builds with `-PsimulateBands=true`, hard-coded false for release, and checked by
-`ReleaseGuardTest` in the release unit tests.
+A pushed `vX.Y.Z` tag runs the Release workflow, which goes no further unless the tagged
+commit is on `main` and passed CI. Its build job, holding only a read-only token, restores the
+keystore from repository secrets into the runner's temp directory, builds, runs the release
+unit tests and lint, then verifies the APK with `apksigner` against a pinned certificate
+fingerprint (also a secret) and hands the APK to a separate release job. That job alone has
+write access, runs no build code, never sees the signing secrets, and creates a draft release.
+The keystore and passwords exist only as secrets; the Gradle build reads them from
+`KAROO_PACE_*` environment variables, or from the gitignored `keystore.properties` for a local
+build. `SIMULATE_BANDS` is a `BuildConfig` field: opt-in for debug builds with
+`-PsimulateBands=true`, hard-coded false for release, and checked by `ReleaseGuardTest` in the
+release unit tests.
 
 ## Consequences
 
