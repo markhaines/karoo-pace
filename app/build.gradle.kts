@@ -6,11 +6,31 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Release signing lives outside the repo: release/karoo-pace.jks + keystore.properties,
-// both gitignored. Without them only debug builds are available.
+// Release signing never lives in the repo. Locally it comes from keystore.properties (and the
+// keystore it points at), both gitignored. In CI the release workflow restores the keystore
+// from GitHub secrets and passes everything as KAROO_PACE_* environment variables. With
+// neither, only debug builds are available: a release build fails at signing validation.
+// See docs/releasing.md.
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun signingValue(propKey: String, envKey: String): String? =
+    (keystoreProps[propKey] as String?)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(envKey).orNull?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("storeFile", "KAROO_PACE_KEYSTORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "KAROO_PACE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "KAROO_PACE_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "KAROO_PACE_KEY_PASSWORD")
+
+// Desk-test switch (cycles every band every 2s). Debug builds only, opt in with
+// -PsimulateBands=true. Release builds hard-code false, so a field that goes on the bike
+// cannot ship with it on; ReleaseGuardTest checks that in the release unit tests.
+val simulateBands = providers.gradleProperty("simulateBands").orElse("false").get()
+require(simulateBands == "true" || simulateBands == "false") {
+    "simulateBands must be true or false, got '$simulateBands'"
 }
 
 android {
@@ -27,11 +47,11 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystoreProps.isNotEmpty()) {
-                storeFile = rootProject.file(keystoreProps["storeFile"] as String)
-                storePassword = keystoreProps["storePassword"] as String
-                keyAlias = keystoreProps["keyAlias"] as String
-                keyPassword = keystoreProps["keyPassword"] as String
+            releaseStoreFile?.let { path ->
+                storeFile = rootProject.file(path)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -40,9 +60,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            buildConfigField("boolean", "SIMULATE_BANDS", simulateBands)
         }
         release {
             signingConfig = signingConfigs.getByName("release")
+            buildConfigField("boolean", "SIMULATE_BANDS", "false")
         }
     }
 

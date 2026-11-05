@@ -1,0 +1,127 @@
+name: Release
+
+# Runs when Mark pushes a version tag (vMAJOR.MINOR.PATCH). Builds a signed release APK from
+# GitHub secrets, verifies the signature against the expected certificate, and creates a
+# DRAFT GitHub release with the APK and its SHA-256. Publishing the draft is a manual step.
+# Setup and the secret names: docs/releasing.md.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write # create the draft release
+  packages: read # karoo-ext from GitHub Packages
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Read-only cache: a release build never writes a cache another run could pick up.
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          validate-wrappers: true
+          cache-read-only: true
+
+      - name: Check the tag matches versionName
+        run: |
+          version=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match versionName $version in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Check the signing secrets are set
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_CERT_SHA256: ${{ secrets.RELEASE_CERT_SHA256 }}
+        run: |
+          missing=0
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_KEYSTORE_PASSWORD RELEASE_KEY_ALIAS \
+                      RELEASE_KEY_PASSWORD RELEASE_CERT_SHA256; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set (see docs/releasing.md)"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Restore the keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "KAROO_PACE_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      # testReleaseUnitTest includes ReleaseGuardTest: the build fails if SIMULATE_BANDS is on.
+      - name: Test, lint, build release
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KAROO_PACE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KAROO_PACE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KAROO_PACE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew testReleaseUnitTest lintRelease assembleRelease --no-daemon
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Verify the signature
+        env:
+          EXPECTED_CERT_SHA256: ${{ secrets.RELEASE_CERT_SHA256 }}
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+
+          "$build_tools/apksigner" verify --verbose --print-certs --min-sdk-version 23 "$apk" > verify.txt
+          cat verify.txt
+
+          signers=$(grep -cE '^Signer #[0-9]+ certificate SHA-256 digest: ' verify.txt || true)
+          if [ "$signers" != "1" ]; then
+            echo "::error::Expected exactly one signer, found $signers"
+            exit 1
+          fi
+          actual=$(sed -nE 's/^Signer #1 certificate SHA-256 digest: ([0-9a-f]+)$/\1/p' verify.txt)
+          expected=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
+          if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
+            echo "::error::APK is not signed with the expected release certificate"
+            exit 1
+          fi
+
+          badging=$("$build_tools/aapt2" dump badging "$apk")
+          if ! grep -q "^package: name='com.hainesy.karoopace' " <<< "$badging"; then
+            echo "::error::Unexpected package name (a debug build?)"
+            exit 1
+          fi
+          if grep -q "application-debuggable" <<< "$badging"; then
+            echo "::error::Release APK is debuggable"
+            exit 1
+          fi
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="karoo-pace-$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$out"
+          sha256sum "$out" > "$out.sha256"
+          gh release create "$GITHUB_REF_NAME" "$out" "$out.sha256" \
+            --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "$GITHUB_REF_NAME" --generate-notes

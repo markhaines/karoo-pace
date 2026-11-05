@@ -71,7 +71,7 @@ GitHub Packages token required).
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-./gradlew :app:testDebugUnitTest      # band logic and redraw timing, no device needed
+./gradlew :app:testDebugUnitTest      # band logic, redraw timing, lifecycle; no device needed
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -83,9 +83,11 @@ id (`.debug` suffix), so they sit alongside a release install rather than replac
 
 ## Verify without riding
 
-Set `SIMULATE_BANDS = true` in `SpeedVsAverageDataType.kt` to cycle through every colour band
-every two seconds, so you can check the field on your desk before taking it out. Turn it off
-before your ride.
+Build a debug APK with `./gradlew :app:assembleDebug -PsimulateBands=true` to cycle through
+every colour band every two seconds, so you can check the field on your desk before taking it
+out. Rebuild without the flag before your ride. Release builds always have it off, and the
+release workflow fails if they do not. The full device checklist is in
+[docs/releasing.md](docs/releasing.md#device-verification).
 
 ## How it matches native
 
@@ -111,8 +113,14 @@ graphic, so any opaque background hides it. Verified on a real ride. Hence repli
 ## Releases
 
 Semver, tagged `vMAJOR.MINOR.PATCH`, with `versionName` in `app/build.gradle.kts` kept in
-step. See [CHANGELOG.md](CHANGELOG.md). CI runs the unit tests, Android Lint (any error fails
-the build) and a debug build on every push to `main` and every pull request.
+step. See [CHANGELOG.md](CHANGELOG.md). CI runs the unit tests (debug and release variants),
+Android Lint (any error fails the build) and a debug build on every push to `main` and every
+pull request. Actions are pinned to commit SHAs and Dependabot proposes updates as PRs.
+
+Pushing a version tag runs the Release workflow: it signs the APK from GitHub secrets,
+verifies the signature against the release certificate and drafts a GitHub release for a
+manual publish. Setup, the secret names and the verification steps are in
+[docs/releasing.md](docs/releasing.md); the reasoning is [ADR-0004](docs/adr/0004-releases-signed-in-ci-from-secrets.md).
 
 ## License
 
